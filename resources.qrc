@@ -1,0 +1,5 @@
+<RCC>
+    <qresource prefix="/plugins/classification_with_bsdd" >
+        <file>icon.png</file>
+    </qresource>
+</RCC>
