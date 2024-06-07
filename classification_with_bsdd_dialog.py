@@ -42,7 +42,9 @@ FORM_CLASS, _ = uic.loadUiType(os.path.join(
 
 class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
     input_url = ""
-    classList = []   
+    classList = []
+    layerSelected = False
+    classSelected = False   
      
     def setApiUrl(self, url):
         global input_url 
@@ -51,6 +53,14 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
     def setClassList(self, list):
         global classList
         classList = list
+        
+    def setClassSelected(self, selected):
+        global classSelected
+        classSelected = selected
+    
+    def setLayerSelected(self, selected):
+        global layerSelected
+        layerSelected = selected
         
     def __init__(self, parent=None):
         """Constructor."""
@@ -61,8 +71,12 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
         # http://qt-project.org/doc/qt-4.8/designer-using-a-ui-file.html
         # #widgets-and-dialogs-with-auto-connect
         self.setupUi(self)
+        
+        self.setClassSelected(False)
+        self.setLayerSelected(False)
 
         self.btnConnectToDictionary.clicked.connect(self.onConnectToDictionaryClicked)
+        self.btnClassifyFeatures.clicked.connect(self.onClassifyFeaturesClicked)
         
         layers = QgsProject.instance().mapLayers()
         layerNames = [l.name() for l in layers.values()]
@@ -104,14 +118,16 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
             self.chooseClass.currentIndexChanged.connect(self.onClassChosen)
         
     def onClassChosen(self):
+        self.setClassSelected(True)
         className = self.chooseClass.currentText()
         con = classList.loc[classList["name"] == className].squeeze()
         # print(con)
         # print(con["code"])
-        
         # self.lblOutput.setText(concept["code"])
+        self.enableClassifyFeatures()
         
     def onLayerChosen(self):
+        self.setLayerSelected(True)
         layerName = self.chooseLayer.currentText()
         layers = QgsProject.instance().mapLayersByName(layerName)
         layer = layers[0]
@@ -121,17 +137,18 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
         #     for field in feature.fields():
         #         print(field)
         # print(layer)
+        self.enableClassifyFeatures()
         
-        bSDDClass = "bSDD Class"
-        layer_provider=layer.dataProvider()
-        if  not bSDDClass in layer.fields().names():
-            layer_provider.addAttributes([QgsField(bSDDClass, QVariant.String)])
-            layer.updateFields()
-            print (layer.fields().names())
-        else:
-            print("Field " + bSDDClass + " already exists")
+        # bSDDClass = "bSDD Class"
+        # layer_provider=layer.dataProvider()
+        # if  not bSDDClass in layer.fields().names():
+        #     layer_provider.addAttributes([QgsField(bSDDClass, QVariant.String)])
+        #     layer.updateFields()
+        #     print (layer.fields().names())
+        # else:
+        #     print("Field " + bSDDClass + " already exists")
             
-        aIndex = layer.fields().indexFromName(bSDDClass)  
+        # aIndex = layer.fields().indexFromName(bSDDClass)  
         
         # add value to each feature
         # layer.startEditing()
@@ -140,8 +157,17 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
         #     layer.updateFeature(feature)
         # layer.commitChanges()
         
-        layer.startEditing()
-        for featureId in layer.selectedFeatureIds():
-            layer_provider.changeAttributeValues({featureId: {aIndex: "tost"}})
-        layer.commitChanges()
+        # add value only to selected features
+        # layer.startEditing()
+        # for featureId in layer.selectedFeatureIds():
+        #     layer_provider.changeAttributeValues({featureId: {aIndex: "tost"}})
+        # layer.commitChanges()
         
+    def enableClassifyFeatures(self):
+        print("Try")
+        if layerSelected == True and classSelected == True:
+            print("ready")
+            self.btnClassifyFeatures.setEnabled(True)
+            
+    def onClassifyFeaturesClicked(self):
+        print("Classify Features")
