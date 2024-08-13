@@ -25,12 +25,12 @@
 import os
 import requests
 import pandas as pd
+import json
 
 from qgis.PyQt import uic
 from qgis.PyQt import QtWidgets
 from qgis.core import (
     QgsProject,
-    QgsVectorLayer,
     QgsField
 )
 from qgis.PyQt.QtCore import QVariant
@@ -43,24 +43,50 @@ FORM_CLASS, _ = uic.loadUiType(os.path.join(
 class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
     input_url = ""
     classList = []
+    layer = ""
+    dictClass = ""
     layerSelected = False
-    classSelected = False   
-     
+    classSelected = False
+
     def setApiUrl(self, url):
-        global input_url 
+        global input_url
         input_url = url
-        
+
     def setClassList(self, list):
         global classList
         classList = list
-        
+
     def setClassSelected(self, selected):
         global classSelected
         classSelected = selected
-    
+
     def setLayerSelected(self, selected):
         global layerSelected
         layerSelected = selected
+
+    def setLayer(self, selectedLayer):
+        global layer
+        layer = selectedLayer
+        
+    def setDictClass(self, selClass):
+        global dictClass
+        dictClass = selClass
+
+    def setDictUri(self, selClass):
+        global dictUrl
+        dictUrl = selClass
+        
+    def setDictionaryList(self, dictList):
+        global dictionaryList
+        dictionaryList = dictList      
+    
+    def setDictionary(self, dict):
+        global dictionary
+        dictionary = dict
+        
+    def setSelectedFeatures(self, selFeatures):
+        global selectedFeatures
+        selectedFeatures = selFeatures
         
     def __init__(self, parent=None):
         """Constructor."""
@@ -71,19 +97,20 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
         # http://qt-project.org/doc/qt-4.8/designer-using-a-ui-file.html
         # #widgets-and-dialogs-with-auto-connect
         self.setupUi(self)
-        
+
         self.setClassSelected(False)
         self.setLayerSelected(False)
 
         self.btnConnectToDictionary.clicked.connect(self.onConnectToDictionaryClicked)
         self.btnClassifyFeatures.clicked.connect(self.onClassifyFeaturesClicked)
-        
+        self.btnSelectAll.clicked.connect(self.onSelectAllClicked)
+
         layers = QgsProject.instance().mapLayers()
         layerNames = [l.name() for l in layers.values()]
         self.chooseLayer.addItems(layerNames)
         self.chooseLayer.currentIndexChanged.connect(self.onLayerChosen)
-        
-        
+
+
     def onConnectToDictionaryClicked(self):
 
         url = self.edUrlToDictionary.text()
@@ -91,83 +118,192 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
 
         response = requests.get(input_url)
         dictionaries = response.json()
-        
+
         df = pd.json_normalize(dictionaries['dictionaries'])
-     
+        self.setDictionaryList(df)
+
         if response.status_code == 200:
             self.chooseDictionary.setEnabled(True)
             self.chooseDictionary.clear()
             self.chooseDictionary.addItems(df['uri'])
             self.chooseDictionary.currentIndexChanged.connect(self.onDictionaryChosen)
 
-        
+
     def onDictionaryChosen(self):
-        dictionary = self.chooseDictionary.currentText()
+        dictionaryUri = self.chooseDictionary.currentText()
+        if dictionaryUri == "":
+            return
         self.chooseClass.clear()
         self.chooseClass.setCurrentText("Choose concept ...")
-        
-        classesResponse = requests.get(input_url + "/classes?Uri=" + dictionary)
-        
+        self.lblOutput.clear()
+        self.lblName.clear()
+        self.lblVersion.clear()
+        dict = dictionaryList.loc[dictionaryList["uri"] == dictionaryUri].squeeze()
+        self.setDictionary(dict)
+        self.lblName.setText(dict['name'])
+        self.lblVersion.setText(dict['version'])
+
+        classesResponse = requests.get(input_url + "/classes?Uri=" + dictionaryUri)
+
         if classesResponse.status_code == 200:
             classes = classesResponse.json()
             df = pd.json_normalize(classes['classes'])
             
+            if len(df) == 0:
+                self.lblOutput.setText("No concepts found")
+                return
+
             self.setClassList(df)
             self.chooseClass.setEnabled(True)
             self.chooseClass.addItems(df['name'])
             self.chooseClass.currentIndexChanged.connect(self.onClassChosen)
-        
+
+    # if class chosen
     def onClassChosen(self):
         self.setClassSelected(True)
+        self.twAttributes.setRowCount(0)
         className = self.chooseClass.currentText()
+        if className == "" or className == "Choose concept ...":
+            return
+
+        self.setDictClass(className) 
         con = classList.loc[classList["name"] == className].squeeze()
-        # print(con)
-        # print(con["code"])
-        # self.lblOutput.setText(concept["code"])
-        self.enableClassifyFeatures()
+        self.setDictUri(con['uri'])
         
+        # print(input_url.replace("Dictionary", "Class") + "?Uri=" + con['uri'] + "&IncludeClassProperties=true")
+        classResponse = requests.get(input_url.replace("Dictionary", "Class") + "?Uri=" + con['uri'] + "&IncludeClassProperties=true")
+        if classResponse.status_code == 200:
+            classInstance = classResponse.json()
+            try:
+                classProperties = pd.json_normalize(classInstance['classProperties'])
+                self.lblOutput.clear()
+                self.twAttributes.setRowCount(len(classProperties))
+                self.twAttributes.setColumnCount(3)
+                self.twAttributes.setHorizontalHeaderLabels(["AttrbuteName", "PropertySet", "Value"])
+                self.twAttributes.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Stretch)
+                for index, row in classProperties.iterrows():
+                    nameItem = QtWidgets.QTableWidgetItem(row["name"])
+                    self.twAttributes.setItem(index, 0, nameItem)
+                    propertySetItem = QtWidgets.QTableWidgetItem(row["propertySet"])
+                    self.twAttributes.setItem(index, 1, propertySetItem)
+            except:
+                self.twAttributes.setRowCount(0)
+                self.lblOutput.setText("No class properties found")
+        
+        self.enableClassifyFeatures()
+
+    # if layer is chosen
     def onLayerChosen(self):
         self.setLayerSelected(True)
+        self.btnSelectAll.setEnabled(True)
         layerName = self.chooseLayer.currentText()
         layers = QgsProject.instance().mapLayersByName(layerName)
-        layer = layers[0]
-        features = layer.getFeatures()
+        self.setLayer(layers[0])
+        # features = layer.getFeatures()
         # for feature in features:
         #     print(feature)
         #     for field in feature.fields():
         #         print(field)
         # print(layer)
+        
         self.enableClassifyFeatures()
-        
-        # bSDDClass = "bSDD Class"
-        # layer_provider=layer.dataProvider()
-        # if  not bSDDClass in layer.fields().names():
-        #     layer_provider.addAttributes([QgsField(bSDDClass, QVariant.String)])
-        #     layer.updateFields()
-        #     print (layer.fields().names())
-        # else:
-        #     print("Field " + bSDDClass + " already exists")
-            
-        # aIndex = layer.fields().indexFromName(bSDDClass)  
-        
-        # add value to each feature
-        # layer.startEditing()
-        # for feature in features:
-        #     layer_provider.changeAttributeValues({feature.id(): {aIndex: "test"}})
-        #     layer.updateFeature(feature)
-        # layer.commitChanges()
-        
-        # add value only to selected features
-        # layer.startEditing()
-        # for featureId in layer.selectedFeatureIds():
-        #     layer_provider.changeAttributeValues({featureId: {aIndex: "tost"}})
-        # layer.commitChanges()
-        
+
+    # enable classification button
     def enableClassifyFeatures(self):
-        print("Try")
         if layerSelected == True and classSelected == True:
-            print("ready")
             self.btnClassifyFeatures.setEnabled(True)
-            
+
     def onClassifyFeaturesClicked(self):
-        print("Classify Features")
+        self.setSelectedFeatures(layer.selectedFeatureIds())
+        
+        if self.rbShp.isChecked():
+            
+            # add bSDD class to selected features
+            self.addContent("bSDDClass", dictClass)
+        
+            # add attributes and values to selected features
+            rowCount = self.twAttributes.rowCount()
+            
+            if rowCount > 0:
+                attributes = {}
+
+                for row in range(rowCount):
+                    attribute = self.twAttributes.item(row, 0).text()
+                    value = ""
+                    try:
+                        value = self.twAttributes.item(row, 2).text()
+                    except:
+                        value = "NULL"
+                    attributes[attribute] = value
+                
+                attributesJson = json.dumps(attributes)
+                
+                self.addContent("bSDDAttr", attributesJson)
+        
+        if self.rbOther.isChecked():
+            
+            # add bSDD class to selected features
+            classiBaseString = "Classification|" + dictionary["name"]
+            self.addContent(classiBaseString + "|name", dictionary["name"])
+            self.addContent(classiBaseString + "|source", dictionary["uri"])
+            self.addContent(classiBaseString + "|version", dictionary["version"])
+            self.addContent(classiBaseString + "|class|uri", dictUrl)
+            self.addContent(classiBaseString + "|class|name", dictClass)
+            
+            # add attributes and values to selected features
+            rowCount = self.twAttributes.rowCount()
+            
+            if rowCount > 0:
+                attributes = {}
+
+                for row in range(rowCount):
+                    attribute = self.twAttributes.item(row, 0).text()
+                    group = self.twAttributes.item(row, 1).text()
+                    value = ""
+                    try:
+                        value = self.twAttributes.item(row, 2).text()
+                    except:
+                        value = "NULL"
+                    attributes[attribute] = value
+                
+                    if group != "":
+                        self.addContent(group + "|" + attribute, value)
+                    else:
+                        self.addContent(attribute, value)
+                  
+            
+        # refresh attribute table    
+        layer.reload()
+
+    def onSelectAllClicked(self):
+        layer.selectAll()
+     
+    # add value only to selected features   
+    def addContent(self, fieldName, value):
+        
+        layer_provider=layer.dataProvider()
+        
+        # if field does not exist, add it
+        if  not fieldName in layer.fields().names():
+            layer_provider.addAttributes([QgsField(fieldName, QVariant.String, "character varying")])
+            layer.updateFields()
+ 
+        aIndex = layer.fields().indexFromName(fieldName)
+
+        # update values of field       
+        layer.startEditing()
+        try:
+            for featureId in selectedFeatures:
+                s = layer_provider.changeAttributeValues({featureId: {aIndex: value}})
+                if not s:
+                    print(f"Failed to update feature ID: {featureId}")
+                
+            # Commit the changes
+            if not layer.commitChanges():
+                raise Exception("Failed to commit changes")
+        except Exception as e:
+            layer.rollBack()
+            print(f"Error: {e}")
+        finally:
+            # Ensure the layer is updated
+            layer.triggerRepaint()
