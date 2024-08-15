@@ -1,42 +1,16 @@
+<!DOCTYPE html>
 <html>
+<head>
+    <title>Feature classification with data dictionary</title>
+</head>
 <body>
-<h3>Plugin Builder Results</h3>
+    <h1>Feature classification with data dictionary</h1>
 
-Congratulations! You just built a plugin for QGIS!<br/><br />
+    <p>This plugin can be used to add a classification and additional attributes to features by editing the attribute table in QGIS.</p>
+    <p>To classify features, a data dictionary API can be queried to retrieve classes and associated attributes from a specific data dictionary.</p>
+    <p>The plugin is implemented against the buildingSMART Data Dictionary (bsDD), but any data dictionary that follows this API structure can be queried.</p>
 
-<div id='help' style='font-size:.9em;'>
-Your plugin <b>ClassificationWithBSDD</b> was created in:<br>
-&nbsp;&nbsp;<b>D:/03_Git_Projekte/QGIS\classification_with_bsdd</b>
-<p>
-Your QGIS plugin directory is located at:<br>
-&nbsp;&nbsp;<b>C:/Users/aseni402/AppData/Roaming/QGIS/QGIS3/profiles/default/python/plugins</b>
-<p>
-<h3>What's Next</h3>
-<ol>
-    <li>If resources.py is not present in your plugin directory, compile the resources file using pyrcc5 (simply use <b>pb_tool</b> or <b>make</b> if you have automake)
-    <li>Optionally, test the generated sources using <b>make test</b> (or run tests from your IDE)
-    <li>Copy the entire directory containing your new plugin to the QGIS plugin directory (see Notes below)
-    <li>Test the plugin by enabling it in the QGIS plugin manager
-    <li>Customize it by editing the implementation file <b>classification_with_bsdd.py</b>
-    <li>Create your own custom icon, replacing the default <b>icon.png</b>
-    <li>Modify your user interface by opening <b>classification_with_bsdd_dialog_base.ui</b> in Qt Designer
-</ol>
-Notes:
-<ul>
-    <li>You can use <b>pb_tool</b> to compile, deploy, and manage your plugin. Tweak the <i>pb_tool.cfg</i> file included with your plugin as you add files. Install <b>pb_tool</b> using 
-        <i>pip</i> or <i>easy_install</i>. See <b>http://loc8.cc/pb_tool</b> for more information.
-    <li>You can also use the <b>Makefile</b> to compile and deploy when you
-        make changes. This requires GNU make (gmake). The Makefile is ready to use, however you 
-        will have to edit it to add addional Python source files, dialogs, and translations.
-</ul>
-</div>
-<div style='font-size:.9em;'>
-<p>
-For information on writing PyQGIS code, see <b>http://loc8.cc/pyqgis_resources</b> for a list of resources.
-</p>
-</div>
-<p>
-&copy;2011-2019 GeoApt LLC - geoapt.com 
-</p>
+    <p>If attributes exist, you can assign values to them before adding them to features.</p>
+    <p>You can select only some features or classify all features in the layer with the same class and attributes.</p>
 </body>
 </html>

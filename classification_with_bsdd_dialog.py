@@ -41,12 +41,9 @@ FORM_CLASS, _ = uic.loadUiType(os.path.join(
 
 
 class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
-    input_url = ""
     classList = []
     layer = ""
     dictClass = ""
-    layerSelected = False
-    classSelected = False
 
     def setApiUrl(self, url):
         global input_url
@@ -115,18 +112,22 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
 
         url = self.edUrlToDictionary.text()
         self.setApiUrl(url)
-
-        response = requests.get(input_url)
-        dictionaries = response.json()
-
-        df = pd.json_normalize(dictionaries['dictionaries'])
-        self.setDictionaryList(df)
+        
+        response = requests.get(url)
 
         if response.status_code == 200:
+            self.lblConnError.clear()
+            dictionaries = response.json()
+            df = pd.json_normalize(dictionaries['dictionaries'])
+            self.setDictionaryList(df)
+            
             self.chooseDictionary.setEnabled(True)
             self.chooseDictionary.clear()
             self.chooseDictionary.addItems(df['uri'])
             self.chooseDictionary.currentIndexChanged.connect(self.onDictionaryChosen)
+        else:
+            self.lblConnError.setText("Coudn't connect to the API")
+            return
 
 
     def onDictionaryChosen(self):
@@ -169,8 +170,8 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
         self.setDictClass(className) 
         con = classList.loc[classList["name"] == className].squeeze()
         self.setDictUri(con['uri'])
-        
-        # print(input_url.replace("Dictionary", "Class") + "?Uri=" + con['uri'] + "&IncludeClassProperties=true")
+
+        # get class attributes
         classResponse = requests.get(input_url.replace("Dictionary", "Class") + "?Uri=" + con['uri'] + "&IncludeClassProperties=true")
         if classResponse.status_code == 200:
             classInstance = classResponse.json()
@@ -182,10 +183,8 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
                 self.twAttributes.setHorizontalHeaderLabels(["AttrbuteName", "PropertySet", "Value"])
                 self.twAttributes.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Stretch)
                 for index, row in classProperties.iterrows():
-                    nameItem = QtWidgets.QTableWidgetItem(row["name"])
-                    self.twAttributes.setItem(index, 0, nameItem)
-                    propertySetItem = QtWidgets.QTableWidgetItem(row["propertySet"])
-                    self.twAttributes.setItem(index, 1, propertySetItem)
+                    self.twAttributes.setItem(index, 0, QtWidgets.QTableWidgetItem(row["name"]))
+                    self.twAttributes.setItem(index, 1, QtWidgets.QTableWidgetItem(row["propertySet"]))
             except:
                 self.twAttributes.setRowCount(0)
                 self.lblOutput.setText("No class properties found")
@@ -196,16 +195,9 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
     def onLayerChosen(self):
         self.setLayerSelected(True)
         self.btnSelectAll.setEnabled(True)
-        layerName = self.chooseLayer.currentText()
-        layers = QgsProject.instance().mapLayersByName(layerName)
+        layers = QgsProject.instance().mapLayersByName(self.chooseLayer.currentText())
         self.setLayer(layers[0])
-        # features = layer.getFeatures()
-        # for feature in features:
-        #     print(feature)
-        #     for field in feature.fields():
-        #         print(field)
-        # print(layer)
-        
+
         self.enableClassifyFeatures()
 
     # enable classification button
@@ -216,33 +208,12 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
     def onClassifyFeaturesClicked(self):
         self.setSelectedFeatures(layer.selectedFeatureIds())
         
-        if self.rbShp.isChecked():
-            
-            # add bSDD class to selected features
-            self.addContent("bSDDClass", dictClass)
+        shapefile = layer.storageType() == "ESRI Shapefile"
         
-            # add attributes and values to selected features
-            rowCount = self.twAttributes.rowCount()
-            
-            if rowCount > 0:
-                attributes = {}
-
-                for row in range(rowCount):
-                    attribute = self.twAttributes.item(row, 0).text()
-                    value = ""
-                    try:
-                        value = self.twAttributes.item(row, 2).text()
-                    except:
-                        value = "NULL"
-                    attributes[attribute] = value
-                
-                attributesJson = json.dumps(attributes)
-                
-                self.addContent("bSDDAttr", attributesJson)
-        
-        if self.rbOther.isChecked():
-            
-            # add bSDD class to selected features
+        # add class to selected features
+        if shapefile:
+            self.addContent("bSDDClass", dictClass)  
+        else:
             classiBaseString = "Classification|" + dictionary["name"]
             self.addContent(classiBaseString + "|name", dictionary["name"])
             self.addContent(classiBaseString + "|source", dictionary["uri"])
@@ -250,28 +221,32 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
             self.addContent(classiBaseString + "|class|uri", dictUrl)
             self.addContent(classiBaseString + "|class|name", dictClass)
             
-            # add attributes and values to selected features
-            rowCount = self.twAttributes.rowCount()
+        # add attributes and values to selected features
+        rowCount = self.twAttributes.rowCount()
             
-            if rowCount > 0:
-                attributes = {}
+        if rowCount > 0:
+            attributes = {}
 
-                for row in range(rowCount):
-                    attribute = self.twAttributes.item(row, 0).text()
-                    group = self.twAttributes.item(row, 1).text()
-                    value = ""
-                    try:
-                        value = self.twAttributes.item(row, 2).text()
-                    except:
-                        value = "NULL"
-                    attributes[attribute] = value
+            for row in range(rowCount):
+                attribute = self.twAttributes.item(row, 0).text()
+                group = self.twAttributes.item(row, 1).text()
+                value = ""
+                try:
+                    value = self.twAttributes.item(row, 2).text()
+                except:
+                    value = "NULL"
+                attributes[attribute] = value
                 
+                if not shapefile:
                     if group != "":
                         self.addContent(group + "|" + attribute, value)
                     else:
                         self.addContent(attribute, value)
-                  
             
+            if shapefile:        
+                attributesJson = json.dumps(attributes)
+                self.addContent("bSDDAttr", attributesJson)
+                  
         # refresh attribute table    
         layer.reload()
 
