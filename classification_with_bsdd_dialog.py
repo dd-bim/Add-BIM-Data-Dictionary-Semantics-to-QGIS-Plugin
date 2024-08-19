@@ -26,12 +26,15 @@ import os
 import requests
 import pandas as pd
 import json
+import sqlite3
+import re
 
 from qgis.PyQt import uic
 from qgis.PyQt import QtWidgets
 from qgis.core import (
     QgsProject,
-    QgsField
+    QgsField,
+    QgsDataSourceUri
 )
 from qgis.PyQt.QtCore import QVariant
 
@@ -85,6 +88,10 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
         global selectedFeatures
         selectedFeatures = selFeatures
         
+    def setFilePath(self, getFilePath):
+        global filePath
+        filePath = getFilePath
+        
     def __init__(self, parent=None):
         """Constructor."""
         super(ClassificationWithBSDDDialog, self).__init__(parent)
@@ -107,6 +114,10 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
         self.chooseLayer.addItems(layerNames)
         self.chooseLayer.currentIndexChanged.connect(self.onLayerChosen)
 
+        # Connect the checkbox to the method
+        self.cbClassifyFile.stateChanged.connect(self.toggleChooseFileButton)
+        # Connect the button to the method
+        self.btnChooseFile.clicked.connect(self.openFileDialog)
 
     def onConnectToDictionaryClicked(self):
 
@@ -197,7 +208,7 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
         self.btnSelectAll.setEnabled(True)
         layers = QgsProject.instance().mapLayersByName(self.chooseLayer.currentText())
         self.setLayer(layers[0])
-
+        
         self.enableClassifyFeatures()
 
     # enable classification button
@@ -209,10 +220,13 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
         self.setSelectedFeatures(layer.selectedFeatureIds())
         
         shapefile = layer.storageType() == "ESRI Shapefile"
-        
+    
         # add class to selected features
         if shapefile:
-            self.addContent("bSDDClass", dictClass)  
+            self.addContent("bSDDClass", dictClass) 
+        if layer.storageType() == "GPKG" and self.cbClassifyFile.isChecked(): 
+            self.modifyGeoPackage()
+            
         else:
             classiBaseString = "Classification|" + dictionary["name"]
             self.addContent(classiBaseString + "|name", dictionary["name"])
@@ -282,3 +296,181 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
         finally:
             # Ensure the layer is updated
             layer.triggerRepaint()
+            
+    def toggleChooseFileButton(self):
+        self.btnChooseFile.setEnabled(self.cbClassifyFile.isChecked())
+
+    def openFileDialog(self):
+        options = QtWidgets.QFileDialog.Options()
+        fileName, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Select GPKG File", "", "GPKG Files (*.gpkg);;All Files (*)", options=options)
+        if fileName:
+            self.setFilePath(fileName)
+            self.lblFilePath.setText(filePath)
+            
+    def modifyGeoPackage(self):
+        conn = sqlite3.connect(filePath)
+        c = conn.cursor()
+        
+        # insert extension into gpkg_extensions table
+        tables_to_insert = ['gpkgext_relations', 'feature_classification_mapping', 'feature_classification_attributes_mapping']
+        for table in tables_to_insert:
+            
+            c.execute("SELECT COUNT(*) FROM gpkg_extensions WHERE table_name = ?", (table,))
+            
+            if c.fetchone()[0] == 0:
+                insert_extension = """
+                INSERT INTO gpkg_extensions ("table_name", "extension_name", "definition", "scope") VALUES 
+                (?, 'gpkg_related_tables', 'http://docs.opengeospatial.org/is/18-000/18-000.html', 'read-write');
+                """
+                c.execute(insert_extension, (table,))
+                conn.commit()
+        
+        # create new tables
+        create_table_classification = """
+        CREATE TABLE IF NOT EXISTS "classification" ( 
+        "cid" INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, 
+        "name" TEXT NOT NULL, 
+        "uri" TEXT NOT NULL, 
+        "catalog_name" TEXT, 
+        "catalog_uri" TEXT NOT NULL,
+        "catalog_version" TEXT
+        );
+        """
+        c.execute(create_table_classification)
+        conn.commit()
+        
+        create_table_classification_attributes = """
+        CREATE TABLE IF NOT EXISTS "classification_attributes" ( 
+        "caid" INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, 
+        "name" TEXT NOT NULL, 
+        "property_set" TEXT, 
+        "value" TEXT
+        );
+        """
+        c.execute(create_table_classification_attributes)
+        conn.commit()
+        
+        create_table_feature_classification_mapping = """
+        CREATE TABLE IF NOT EXISTS "feature_classification_mapping" (
+        base_id INTEGER NOT NULL,
+        related_id INTEGER NOT NULL,
+        PRIMARY KEY(base_id, related_id)
+        );
+        """
+        c.execute(create_table_feature_classification_mapping)
+        conn.commit()
+        
+        create_table_feature_classification_attributes_mapping = """
+        CREATE TABLE IF NOT EXISTS "feature_classification_attributes_mapping" (
+        base_id INTEGER NOT NULL,
+        related_id INTEGER NOT NULL,
+        PRIMARY KEY(base_id, related_id)
+        );
+        """
+        c.execute(create_table_feature_classification_attributes_mapping)
+        conn.commit()
+        
+        create_table_gpkgext_relations = """
+        CREATE TABLE IF NOT EXISTS gpkgext_relations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        base_table_name TEXT NOT NULL,
+        base_primary_column TEXT NOT NULL DEFAULT 'id',
+        related_table_name TEXT NOT NULL,
+        related_primary_column TEXT NOT NULL DEFAULT 'id',
+        relation_name TEXT NOT NULL,
+        mapping_table_name TEXT NOT NULL UNIQUE
+        );
+        """
+        c.execute(create_table_gpkgext_relations)
+        conn.commit()
+        
+        parts = re.split(r'[|?&]', layer.source())
+        layer_table = None
+        for part in parts:
+            if part.startswith('layername='):
+                layer_table = part.split('=')[1]
+                break
+        if layer_table is None:
+            raise ValueError("Layer table name could not be extracted from the source.")
+        
+        # initialize relation tables
+        init_relation_tables = """
+        INSERT INTO gpkgext_relations ("base_table_name", "base_primary_column", "related_table_name", "related_primary_column", "relation_name", "mapping_table_name") VALUES 
+        (?, 'fid', 'classification', 'cid', 'simple_attributes', 'feature_classification_mapping'),
+        (?, 'fid', 'classification_attributes', 'caid', 'simple_attributes', 'feature_classification_attributes_mapping')
+        ON CONFLICT(mapping_table_name) DO NOTHING;
+        """
+        c.execute(init_relation_tables, (layer_table, layer_table))
+        conn.commit()
+        
+        # initialize relation tables
+        add_attribute_tables = """
+        INSERT INTO gpkg_contents ("table_name", "data_type", "identifier") VALUES 
+        ('classification', 'attributes', 'classification'),
+        ('classification_attributes', 'attributes', 'classification_attributes')
+        ON CONFLICT(table_name) DO NOTHING;
+        """
+        c.execute(add_attribute_tables)
+        conn.commit()
+        
+        # insert classification
+        dictionary_name = dictionary["name"]
+        dictionary_uri = dictionary["uri"]
+        dictionary_version = dictionary["version"]
+        new_classification_id = ""
+        
+        selectClassification = """
+        select cid from classification where name = ? and uri = ? and catalog_name = ? and catalog_uri = ? and catalog_version = ?;
+        """
+        c.execute(selectClassification, (dictClass, dictUrl, dictionary_name, dictionary_uri, dictionary_version))
+        result = c.fetchone()
+        
+        if result is not None:
+            new_classification_id = result[0]
+        else:
+            insert_classification = """
+            INSERT INTO classification ("name", "uri", "catalog_name", "catalog_uri", "catalog_version") VALUES 
+            (?, ?, ?, ?, ?);
+            """
+            c.execute(insert_classification, (dictClass, dictUrl, dictionary_name, dictionary_uri, dictionary_version))
+            conn.commit()
+            new_classification_id = c.lastrowid
+
+        # insert feature classification relations
+        for featureId in selectedFeatures:
+            insert_relations = """
+            INSERT INTO feature_classification_mapping ("base_id", "related_id") VALUES (?, ?)
+            ON CONFLICT(base_id, related_id) DO NOTHING;
+            """
+            c.execute(insert_relations, (featureId, new_classification_id))
+            conn.commit()
+        
+        # insert attributes
+        rowCount = self.twAttributes.rowCount()  
+        if rowCount > 0:
+            for row in range(rowCount):
+                attribute = self.twAttributes.item(row, 0).text()
+                group = self.twAttributes.item(row, 1).text()
+                value = ""
+                try:
+                    value = self.twAttributes.item(row, 2).text()
+                except:
+                    value = "NULL"
+                insert_attributes = """
+                INSERT INTO classification_attributes ("name", "property_set", "value") VALUES (?, ?, ?);
+                """
+                c.execute(insert_attributes, (attribute, group, value))
+                conn.commit()
+                
+                new_attribute_id = c.lastrowid
+                
+                # insert feature attribute relations
+                for featureId in selectedFeatures:
+                    insert_attribut_relations = """
+                    INSERT INTO feature_classification_attributes_mapping ("base_id", "related_id") VALUES (?, ?);
+                    """
+                    c.execute(insert_attribut_relations, (featureId, new_attribute_id))
+                    conn.commit()
+        c.close()
+        conn.close()
+                

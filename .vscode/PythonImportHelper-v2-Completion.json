@@ -138,6 +138,14 @@
         "documentation": {}
     },
     {
+        "label": "QgsDataSourceUri",
+        "importPath": "qgis.core",
+        "description": "qgis.core",
+        "isExtraImport": true,
+        "detail": "qgis.core",
+        "documentation": {}
+    },
+    {
         "label": "QgsMapCanvasLayer",
         "importPath": "qgis.gui",
         "description": "qgis.gui",
@@ -271,6 +279,24 @@
         "importPath": "json",
         "description": "json",
         "detail": "json",
+        "documentation": {}
+    },
+    {
+        "label": "sqlite3",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "sqlite3",
+        "description": "sqlite3",
+        "detail": "sqlite3",
+        "documentation": {}
+    },
+    {
+        "label": "re",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "re",
+        "description": "re",
+        "detail": "re",
         "documentation": {}
     },
     {
@@ -1188,7 +1214,7 @@
         "kind": 6,
         "importPath": "classification_with_bsdd_dialog_base_ui",
         "description": "classification_with_bsdd_dialog_base_ui",
-        "peekOfCode": "class Ui_ClassificationWithBSDDDialogBase(object):\n    def setupUi(self, ClassificationWithBSDDDialogBase):\n        ClassificationWithBSDDDialogBase.setObjectName(\"ClassificationWithBSDDDialogBase\")\n        ClassificationWithBSDDDialogBase.resize(826, 517)\n        ClassificationWithBSDDDialogBase.setBaseSize(QtCore.QSize(0, 16))\n        self.gridLayout = QtWidgets.QGridLayout(ClassificationWithBSDDDialogBase)\n        self.gridLayout.setObjectName(\"gridLayout\")\n        self.label_2 = QtWidgets.QLabel(ClassificationWithBSDDDialogBase)\n        self.label_2.setMinimumSize(QtCore.QSize(94, 16))\n        self.label_2.setMaximumSize(QtCore.QSize(94, 16))",
+        "peekOfCode": "class Ui_ClassificationWithBSDDDialogBase(object):\n    def setupUi(self, ClassificationWithBSDDDialogBase):\n        ClassificationWithBSDDDialogBase.setObjectName(\"ClassificationWithBSDDDialogBase\")\n        ClassificationWithBSDDDialogBase.resize(826, 553)\n        ClassificationWithBSDDDialogBase.setBaseSize(QtCore.QSize(0, 16))\n        self.gridLayout = QtWidgets.QGridLayout(ClassificationWithBSDDDialogBase)\n        self.gridLayout.setObjectName(\"gridLayout\")\n        self.label_2 = QtWidgets.QLabel(ClassificationWithBSDDDialogBase)\n        self.label_2.setMinimumSize(QtCore.QSize(94, 16))\n        self.label_2.setMaximumSize(QtCore.QSize(94, 16))",
         "detail": "classification_with_bsdd_dialog_base_ui",
         "documentation": {}
     },
