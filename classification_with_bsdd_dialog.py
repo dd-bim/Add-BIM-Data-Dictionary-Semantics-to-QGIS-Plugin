@@ -130,6 +130,7 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
             self.lblConnError.clear()
             dictionaries = response.json()
             df = pd.json_normalize(dictionaries['dictionaries'])
+            df = df.sort_values(ascending=True, by='name')
             self.setDictionaryList(df)
             
             self.chooseDictionary.setEnabled(True)
@@ -164,7 +165,8 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
             if len(df) == 0:
                 self.lblOutput.setText("No concepts found")
                 return
-
+            
+            df = df.sort_values(ascending=True, by='name')
             self.setClassList(df)
             self.chooseClass.setEnabled(True)
             self.chooseClass.addItems(df['name'])
@@ -174,13 +176,13 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
     def onClassChosen(self):
         self.setClassSelected(True)
         self.twAttributes.setRowCount(0)
-        className = self.chooseClass.currentText()
-        if className == "" or className == "Choose concept ...":
+        classIndex = self.chooseClass.currentIndex()
+        if classIndex == -1:
             return
 
-        self.setDictClass(className) 
-        con = classList.loc[classList["name"] == className].squeeze()
+        con = classList.iloc[classIndex].squeeze()
         self.setDictUri(con['uri'])
+        self.setDictClass(con['name']) 
 
         # get class attributes
         classResponse = requests.get(input_url.replace("Dictionary", "Class") + "?Uri=" + con['uri'] + "&IncludeClassProperties=true")
@@ -232,8 +234,8 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
             self.addContent(classiBaseString + "|name", dictionary["name"])
             self.addContent(classiBaseString + "|source", dictionary["uri"])
             self.addContent(classiBaseString + "|version", dictionary["version"])
-            self.addContent(classiBaseString + "|class|uri", dictUrl)
-            self.addContent(classiBaseString + "|class|name", dictClass)
+            self.addContent(classiBaseString + "|class|" + dictClass + "|uri", dictUrl)
+            self.addContent(classiBaseString + "|class|" + dictClass + "|name", dictClass)
             
         # add attributes and values to selected features
         rowCount = self.twAttributes.rowCount()
