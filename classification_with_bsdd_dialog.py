@@ -33,10 +33,9 @@ from qgis.PyQt import uic
 from qgis.PyQt import QtWidgets
 from qgis.core import (
     QgsProject,
-    QgsField,
-    QgsDataSourceUri
+    QgsField
 )
-from qgis.PyQt.QtCore import QVariant
+from qgis.PyQt.QtCore import QMetaType
 
 # This loads your .ui file so that PyQt can populate your plugin with the elements from Qt Designer
 FORM_CLASS, _ = uic.loadUiType(os.path.join(
@@ -156,8 +155,9 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
         self.lblName.setText(dict['name'])
         self.lblVersion.setText(dict['version'])
 
-        classesResponse = requests.get(input_url + "/classes?Uri=" + dictionaryUri)
-
+        classesResponse = requests.get(input_url + "/Classes?URI=" + dictionaryUri)
+        print(input_url + "/classes?Uri=" + dictionaryUri)
+        print(classesResponse.status_code)
         if classesResponse.status_code == 200:
             classes = classesResponse.json()
             df = pd.json_normalize(classes['classes'])
@@ -226,9 +226,6 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
         # add class to selected features
         if shapefile:
             self.addContent("bSDDClass", dictClass) 
-        if layer.storageType() == "GPKG" and self.cbClassifyFile.isChecked(): 
-            self.modifyGeoPackage()
-            
         else:
             classiBaseString = "Classification|" + dictionary["name"]
             self.addContent(classiBaseString + "|name", dictionary["name"])
@@ -236,6 +233,10 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
             self.addContent(classiBaseString + "|version", dictionary["version"])
             self.addContent(classiBaseString + "|class|" + dictClass + "|uri", dictUrl)
             self.addContent(classiBaseString + "|class|" + dictClass + "|name", dictClass)
+            
+            if layer.storageType() == "GPKG" and self.cbClassifyFile.isChecked(): 
+                self.modifyGeoPackage()
+            
             
         # add attributes and values to selected features
         rowCount = self.twAttributes.rowCount()
@@ -276,7 +277,7 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
         
         # if field does not exist, add it
         if  not fieldName in layer.fields().names():
-            layer_provider.addAttributes([QgsField(fieldName, QVariant.String, "character varying")])
+            layer_provider.addAttributes([QgsField(fieldName, QMetaType.Type.QString)])
             layer.updateFields()
  
         aIndex = layer.fields().indexFromName(fieldName)
@@ -314,7 +315,7 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
         c = conn.cursor()
         
         # insert extension into gpkg_extensions table
-        tables_to_insert = ['gpkgext_relations', 'feature_classification_mapping', 'feature_classification_attributes_mapping']
+        tables_to_insert = ['gpkgext_relations', 'feature_classification_mapping', 'feature_classification_attributes_mapping', 'classification_dictionary_mapping']
         for table in tables_to_insert:
             
             c.execute("SELECT COUNT(*) FROM gpkg_extensions WHERE table_name = ?", (table,))
@@ -332,13 +333,21 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
         CREATE TABLE IF NOT EXISTS "classification" ( 
         "cid" INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, 
         "name" TEXT NOT NULL, 
-        "uri" TEXT NOT NULL, 
-        "catalog_name" TEXT, 
-        "catalog_uri" TEXT NOT NULL,
-        "catalog_version" TEXT
+        "uri" TEXT NOT NULL
         );
         """
         c.execute(create_table_classification)
+        conn.commit()
+        
+        create_table_dictionary = """
+        CREATE TABLE IF NOT EXISTS "dictionary" ( 
+        "did" INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, 
+        "name" TEXT, 
+        "uri" TEXT NOT NULL, 
+        "version" TEXT
+        );
+        """
+        c.execute(create_table_dictionary)
         conn.commit()
         
         create_table_classification_attributes = """
@@ -372,6 +381,16 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
         c.execute(create_table_feature_classification_attributes_mapping)
         conn.commit()
         
+        create_table_classification_dictionary_mapping = """
+        CREATE TABLE IF NOT EXISTS "classification_dictionary_mapping" (
+        base_id INTEGER NOT NULL,
+        related_id INTEGER NOT NULL,
+        PRIMARY KEY(base_id, related_id)
+        );
+        """
+        c.execute(create_table_classification_dictionary_mapping)
+        conn.commit()
+        
         create_table_gpkgext_relations = """
         CREATE TABLE IF NOT EXISTS gpkgext_relations (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -399,7 +418,8 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
         init_relation_tables = """
         INSERT INTO gpkgext_relations ("base_table_name", "base_primary_column", "related_table_name", "related_primary_column", "relation_name", "mapping_table_name") VALUES 
         (?, 'fid', 'classification', 'cid', 'simple_attributes', 'feature_classification_mapping'),
-        (?, 'fid', 'classification_attributes', 'caid', 'simple_attributes', 'feature_classification_attributes_mapping')
+        (?, 'fid', 'classification_attributes', 'caid', 'simple_attributes', 'feature_classification_attributes_mapping'),
+        ('classification', 'cid', 'dictionary', 'did', 'simple_attributes', 'classification_dictionary_mapping')
         ON CONFLICT(mapping_table_name) DO NOTHING;
         """
         c.execute(init_relation_tables, (layer_table, layer_table))
@@ -409,7 +429,8 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
         add_attribute_tables = """
         INSERT INTO gpkg_contents ("table_name", "data_type", "identifier") VALUES 
         ('classification', 'attributes', 'classification'),
-        ('classification_attributes', 'attributes', 'classification_attributes')
+        ('classification_attributes', 'attributes', 'classification_attributes'),
+        ('dictionary', 'attributes', 'dictionary')
         ON CONFLICT(table_name) DO NOTHING;
         """
         c.execute(add_attribute_tables)
@@ -422,21 +443,48 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
         new_classification_id = ""
         
         selectClassification = """
-        select cid from classification where name = ? and uri = ? and catalog_name = ? and catalog_uri = ? and catalog_version = ?;
+        select cid from classification where name = ? and uri = ?;
         """
-        c.execute(selectClassification, (dictClass, dictUrl, dictionary_name, dictionary_uri, dictionary_version))
+        c.execute(selectClassification, (dictClass, dictUrl))
         result = c.fetchone()
         
         if result is not None:
             new_classification_id = result[0]
         else:
             insert_classification = """
-            INSERT INTO classification ("name", "uri", "catalog_name", "catalog_uri", "catalog_version") VALUES 
-            (?, ?, ?, ?, ?);
+            INSERT INTO classification ("name", "uri") VALUES 
+            (?, ?);
             """
-            c.execute(insert_classification, (dictClass, dictUrl, dictionary_name, dictionary_uri, dictionary_version))
+            c.execute(insert_classification, (dictClass, dictUrl))
             conn.commit()
             new_classification_id = c.lastrowid
+            
+            # insert dictionary
+            new_dictionary_id = ""
+            selectDictionary = """
+            select did from dictionary where uri = ? and name = ? and version = ?;
+            """
+            c.execute(selectDictionary, (dictionary_uri, dictionary_name, dictionary_version))
+            res = c.fetchone()
+            
+            if res is not None:
+                new_dictionary_id = res[0]
+            else:
+                insert_dictionary = """
+                INSERT INTO dictionary ("name", "uri", "version") VALUES 
+                (?, ?, ?);
+                """
+                c.execute(insert_dictionary, (dictionary_name, dictionary_uri, dictionary_version))
+                conn.commit()
+                new_dictionary_id = c.lastrowid
+                
+                # insert classification dictionary relations
+                insert_dictionary_relations = """
+                INSERT INTO classification_dictionary_mapping ("base_id", "related_id") VALUES (?, ?)
+                ON CONFLICT(base_id, related_id) DO NOTHING;
+                """
+                c.execute(insert_dictionary_relations, (new_classification_id, new_dictionary_id))
+                conn.commit()
 
         # insert feature classification relations
         for featureId in selectedFeatures:

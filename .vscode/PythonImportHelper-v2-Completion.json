@@ -82,7 +82,7 @@
         "documentation": {}
     },
     {
-        "label": "QVariant",
+        "label": "QMetaType",
         "importPath": "qgis.PyQt.QtCore",
         "description": "qgis.PyQt.QtCore",
         "isExtraImport": true,
@@ -131,14 +131,6 @@
     },
     {
         "label": "QgsField",
-        "importPath": "qgis.core",
-        "description": "qgis.core",
-        "isExtraImport": true,
-        "detail": "qgis.core",
-        "documentation": {}
-    },
-    {
-        "label": "QgsDataSourceUri",
         "importPath": "qgis.core",
         "description": "qgis.core",
         "isExtraImport": true,
