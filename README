@@ -10,4 +10,4 @@ You can select only some features or classify all features in the layer with the
 If you have a GeoPackage, you can additionally extend it with the GeoPackage Related Tables Extension of OGC. You have to chose the source GeoPackage file of the loaded Layer. Additional Attribute Tables for class, attributes and dictionary are added to the file to enrich the semantics of the features. To see the additional attribute tables, you have to reload the GeoPackage file in QGIS.
 The table schema is shown below:
 
-![GeoPackage Extension](img/GeoPackage_Class_Extension.png)
+![GeoPackage Extension](https://github.com/dd-bim/Add-BIM-Data-Dictionary-Semantics-to-QGIS-Plugin/blob/main/img/GeoPackage_Class_Extension.png)
