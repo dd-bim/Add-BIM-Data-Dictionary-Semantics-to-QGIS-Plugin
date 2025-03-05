@@ -12,6 +12,7 @@ email=sebastian.schilling@htw-dresden.de
 
 about=The plugin connects to the buildingSMART Data Dictionary (bSDD) API or other similar APIs. The user can search for concepts to annotate features in QGIS layers and add predifined attributes from the data dictionary.
 
+homepage=https://github.com/dd-bim/Add-BIM-Data-Dictionary-Semantics-to-QGIS-Plugin
 tracker=https://github.com/dd-bim/Add-BIM-Data-Dictionary-Semantics-to-QGIS-Plugin/issues
 repository=https://github.com/dd-bim/Add-BIM-Data-Dictionary-Semantics-to-QGIS-Plugin
 # End of mandatory metadata
