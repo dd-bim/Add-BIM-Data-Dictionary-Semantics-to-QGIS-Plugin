@@ -21,7 +21,7 @@ hasProcessingProvider=no
 # Tags are comma separated with spaces allowed
 tags=BIM,Data Dictionary, BIM Classification, bSDD
 
-icon=icon.png
+icon=img/icon.png
 # experimental flag
 experimental=True
 
