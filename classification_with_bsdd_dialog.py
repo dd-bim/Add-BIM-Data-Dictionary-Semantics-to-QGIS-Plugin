@@ -28,6 +28,7 @@ import pandas as pd
 import json
 import sqlite3
 import re
+import time
 
 from qgis.PyQt import uic
 from qgis.PyQt import QtCore
@@ -92,6 +93,39 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
         global filePath
         filePath = getFilePath
 
+    def logApiMessage(self, message):
+        print(f"[bSDD] {message}")
+
+    def makeApiRequest(self, url, context_label="API request", max_retries=3):
+        self.logApiMessage(f"{context_label}: start {url}")
+
+        for attempt in range(max_retries):
+            try:
+                response = requests.get(url, timeout=60)
+                self.logApiMessage(
+                    f"{context_label}: attempt {attempt + 1}/{max_retries} returned HTTP {response.status_code}"
+                )
+
+                if response.status_code == 429:
+                    if attempt < max_retries - 1:
+                        wait_time = 2 ** attempt
+                        self.logApiMessage(
+                            f"{context_label}: rate limited, retrying in {wait_time}s"
+                        )
+                        QtWidgets.QApplication.processEvents()
+                        time.sleep(wait_time)
+                        continue
+
+                    self.logApiMessage(f"{context_label}: rate limit exceeded after {max_retries} attempts")
+                    return None, 429, "API rate limit exceeded after retries"
+
+                return response, response.status_code, None
+            except Exception as e:
+                self.logApiMessage(f"{context_label}: request failed with exception: {e}")
+                return None, None, str(e)
+
+        return None, None, "Unknown error"
+
     def __init__(self, parent=None):
         """Constructor."""
         super(ClassificationWithBSDDDialog, self).__init__(parent)
@@ -129,9 +163,13 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
         url = self.edUrlToDictionary.text()
         self.setApiUrl(url)
 
-        response = requests.get(url + '/api/Dictionary/v1', timeout=60)
+        response, status_code, error = self.makeApiRequest(url + '/api/Dictionary/v1', 'Load dictionaries')
 
-        if response.status_code == 200:
+        if error:
+            self.lblConnError.setText(f"Connection error: {error}")
+            return
+
+        if status_code == 200:
             self.lblConnError.clear()
             dictionaries = response.json()
             df = pd.json_normalize(dictionaries['dictionaries'])
@@ -145,7 +183,7 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
                 self.chooseDictionary.addItem(label, row['uri'])
             self.chooseDictionary.currentIndexChanged.connect(self.onDictionaryChosen)
         else:
-            self.lblConnError.setText("Coudn't connect to the API")
+            self.lblConnError.setText(f"Couldn't connect to the API (Status: {status_code})")
             return
 
     def onDictionaryChosen(self):
@@ -162,10 +200,15 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
         self.lblName.setText(dict['name'])
         self.lblVersion.setText(dict['version'])
 
-        classesResponse = requests.get(input_url + "/api/Dictionary/v1/Classes?URI=" + dictionaryUri, timeout=60)
-        print(input_url + "/api/Dictionary/v1/Classes?URI=" + dictionaryUri)
-        print(classesResponse.status_code)
-        if classesResponse.status_code == 200:
+        classesUrl = input_url + "/api/Dictionary/v1/Classes?URI=" + dictionaryUri
+        self.logApiMessage(f"Load classes: {classesUrl}")
+        classesResponse, status_code, error = self.makeApiRequest(classesUrl, 'Load classes')
+
+        if error:
+            self.lblOutput.setText(f"Error loading classes: {error}")
+            return
+
+        if status_code == 200:
             classes = classesResponse.json()
             df = pd.json_normalize(classes['classes'])
 
@@ -207,8 +250,17 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
             self.lblClassDescription.clear() 
 
         # get class attributes
-        classResponse = requests.get(input_url + "/api/Class/v1?Uri=" + con['uri'] + "&IncludeClassProperties=true", timeout=60)
-        if classResponse.status_code == 200:
+        classUrl = input_url + "/api/Class/v1?Uri=" + con['uri'] + "&IncludeClassProperties=true"
+        self.logApiMessage(f"Load class properties: {classUrl}")
+        classResponse, status_code, error = self.makeApiRequest(classUrl, 'Load class properties')
+
+        if error:
+            self.twAttributes.setRowCount(0)
+            self.lblOutput.setText(f"Error loading properties: {error}")
+            self.twAttributes.setSortingEnabled(True)
+            return
+
+        if status_code == 200:
             classInstance = classResponse.json()
             try:
                 classProperties = pd.json_normalize(classInstance['classProperties'])
@@ -246,6 +298,10 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
                 self.twAttributes.setRowCount(0)
                 self.lblOutput.setText("No class properties found")
                 self.twAttributes.setSortingEnabled(True)
+        else:
+            self.twAttributes.setRowCount(0)
+            self.lblOutput.setText(f"API Error: {status_code}")
+            self.twAttributes.setSortingEnabled(True)
 
         self.enableClassifyFeatures()
 
@@ -279,9 +335,6 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
     def attributeValue(self, row):
         widget = self.twAttributes.cellWidget(row, 2)
         if isinstance(widget, QtWidgets.QComboBox):
-            current_data = widget.currentData()
-            if current_data is not None and current_data != "":
-                return str(current_data).strip()
             return widget.currentText().strip()
         if isinstance(widget, QtWidgets.QLineEdit):
             value = widget.text().strip()
