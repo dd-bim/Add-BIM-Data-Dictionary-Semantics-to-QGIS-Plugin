@@ -6,7 +6,7 @@
 name=Add BIM Data Dictionary Semantics
 qgisMinimumVersion=3.0
 description=Use the buildingSMART Data Dictionary (bSDD) API or similar APIs to classify features and add attributes
-version=1.0
+version=1.1
 author=Sebastian Schilling, HTW Dresden
 email=sebastian.schilling@htw-dresden.de
 
@@ -24,7 +24,7 @@ tags=BIM,Data Dictionary, BIM Classification, bSDD
 
 icon=img/icon.png
 # experimental flag
-experimental=True
+experimental=False
 
 # deprecated flag (applies to the whole plugin, not just a single version)
 deprecated=False

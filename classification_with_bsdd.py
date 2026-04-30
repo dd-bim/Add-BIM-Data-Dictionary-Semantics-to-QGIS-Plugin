@@ -82,7 +82,6 @@ class ClassificationWithBSDD:
         # noinspection PyTypeChecker,PyArgumentList,PyCallByClass
         return QCoreApplication.translate('ClassificationWithBSDD', message)
 
-
     def add_action(
         self,
         icon_path,
@@ -132,7 +131,6 @@ class ClassificationWithBSDD:
             added to self.actions list.
         :rtype: QAction
         """
-
         icon = QIcon(icon_path)
         action = QAction(icon, text, parent)
         action.triggered.connect(callback)
@@ -170,7 +168,6 @@ class ClassificationWithBSDD:
         # will be set False in run()
         self.first_start = True
 
-
     def unload(self):
         """Removes the plugin menu item and icon from QGIS GUI."""
         for action in self.actions:
@@ -179,13 +176,12 @@ class ClassificationWithBSDD:
                 action)
             self.iface.removeToolBarIcon(action)
 
-
     def run(self):
         """Run method that performs all the real work"""
 
         # Create the dialog with elements (after translation) and keep reference
         # Only create GUI ONCE in callback, so that it will only load when the plugin is started
-        if self.first_start == True:
+        if self.first_start is True:
             self.first_start = False
             # self.dlg = ClassificationWithBSDDDialog()
 

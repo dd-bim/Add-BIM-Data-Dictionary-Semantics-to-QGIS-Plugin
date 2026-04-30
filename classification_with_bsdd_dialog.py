@@ -30,6 +30,8 @@ import sqlite3
 import re
 
 from qgis.PyQt import uic
+from qgis.PyQt import QtCore
+from qgis.PyQt import QtGui
 from qgis.PyQt import QtWidgets
 from qgis.core import (
     QgsProject,
@@ -40,7 +42,6 @@ from qgis.PyQt.QtCore import QMetaType
 # This loads your .ui file so that PyQt can populate your plugin with the elements from Qt Designer
 FORM_CLASS, _ = uic.loadUiType(os.path.join(
     os.path.dirname(__file__), 'classification_with_bsdd_dialog_base.ui'))
-
 
 class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
     classList = []
@@ -66,7 +67,7 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
     def setLayer(self, selectedLayer):
         global layer
         layer = selectedLayer
-        
+
     def setDictClass(self, selClass):
         global dictClass
         dictClass = selClass
@@ -74,23 +75,23 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
     def setDictUri(self, selClass):
         global dictUrl
         dictUrl = selClass
-        
+
     def setDictionaryList(self, dictList):
         global dictionaryList
         dictionaryList = dictList      
-    
+
     def setDictionary(self, dict):
         global dictionary
         dictionary = dict
-        
+ 
     def setSelectedFeatures(self, selFeatures):
         global selectedFeatures
         selectedFeatures = selFeatures
-        
+
     def setFilePath(self, getFilePath):
         global filePath
         filePath = getFilePath
-        
+
     def __init__(self, parent=None):
         """Constructor."""
         super(ClassificationWithBSDDDialog, self).__init__(parent)
@@ -101,15 +102,20 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
         # #widgets-and-dialogs-with-auto-connect
         self.setupUi(self)
 
+        self.lblClassDescription.setTextFormat(QtCore.Qt.PlainText)
+
         self.setClassSelected(False)
         self.setLayerSelected(False)
 
         self.btnConnectToDictionary.clicked.connect(self.onConnectToDictionaryClicked)
         self.btnClassifyFeatures.clicked.connect(self.onClassifyFeaturesClicked)
         self.btnSelectAll.clicked.connect(self.onSelectAllClicked)
+        self.edAttributeFilter.textChanged.connect(self.applyAttributeFilter)
+
+        self.twAttributes.setSortingEnabled(True)
 
         layers = QgsProject.instance().mapLayers()
-        layerNames = [l.name() for l in layers.values()]
+        layerNames = [ln.name() for ln in layers.values()]
         self.chooseLayer.addItems(layerNames)
         self.chooseLayer.currentIndexChanged.connect(self.onLayerChosen)
 
@@ -122,8 +128,8 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
 
         url = self.edUrlToDictionary.text()
         self.setApiUrl(url)
-        
-        response = requests.get(url)
+
+        response = requests.get(url + '/api/Dictionary/v1', timeout=60)
 
         if response.status_code == 200:
             self.lblConnError.clear()
@@ -134,16 +140,17 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
             
             self.chooseDictionary.setEnabled(True)
             self.chooseDictionary.clear()
-            self.chooseDictionary.addItems(df['uri'])
+            for _, row in df.iterrows():
+                label = f"{row['name']} ({row['version']})"
+                self.chooseDictionary.addItem(label, row['uri'])
             self.chooseDictionary.currentIndexChanged.connect(self.onDictionaryChosen)
         else:
             self.lblConnError.setText("Coudn't connect to the API")
             return
 
-
     def onDictionaryChosen(self):
-        dictionaryUri = self.chooseDictionary.currentText()
-        if dictionaryUri == "":
+        dictionaryUri = self.chooseDictionary.currentData()
+        if not dictionaryUri:
             return
         self.chooseClass.clear()
         self.chooseClass.setCurrentText("Choose concept ...")
@@ -155,37 +162,52 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
         self.lblName.setText(dict['name'])
         self.lblVersion.setText(dict['version'])
 
-        classesResponse = requests.get(input_url + "/Classes?URI=" + dictionaryUri)
-        print(input_url + "/classes?Uri=" + dictionaryUri)
+        classesResponse = requests.get(input_url + "/api/Dictionary/v1/Classes?URI=" + dictionaryUri, timeout=60)
+        print(input_url + "/api/Dictionary/v1/Classes?URI=" + dictionaryUri)
         print(classesResponse.status_code)
         if classesResponse.status_code == 200:
             classes = classesResponse.json()
             df = pd.json_normalize(classes['classes'])
-            
+
             if len(df) == 0:
                 self.lblOutput.setText("No concepts found")
                 return
-            
+
             df = df.sort_values(ascending=True, by='name')
             self.setClassList(df)
             self.chooseClass.setEnabled(True)
-            self.chooseClass.addItems(df['name'])
+            for _, row in df.iterrows():
+                code = row.get('code', '')
+                if code:
+                    label = f"{row['name']} ({code})"
+                else:
+                    label = row['name']
+                self.chooseClass.addItem(label, row.get('uri', ''))
             self.chooseClass.currentIndexChanged.connect(self.onClassChosen)
 
     # if class chosen
     def onClassChosen(self):
         self.setClassSelected(True)
         self.twAttributes.setRowCount(0)
+        self.twAttributes.setSortingEnabled(False)
         classIndex = self.chooseClass.currentIndex()
         if classIndex == -1:
+            self.lblClassDescription.clear()
             return
 
         con = classList.iloc[classIndex].squeeze()
         self.setDictUri(con['uri'])
-        self.setDictClass(con['name']) 
+        self.setDictClass(con['name'])
+        
+        # Display class description if available
+        description = con.get('descriptionPart', '')
+        if description:
+            self.lblClassDescription.setText(f"Description: {description}")
+        else:
+            self.lblClassDescription.clear() 
 
         # get class attributes
-        classResponse = requests.get(input_url.replace("Dictionary", "Class") + "?Uri=" + con['uri'] + "&IncludeClassProperties=true")
+        classResponse = requests.get(input_url + "/api/Class/v1?Uri=" + con['uri'] + "&IncludeClassProperties=true", timeout=60)
         if classResponse.status_code == 200:
             classInstance = classResponse.json()
             try:
@@ -193,16 +215,143 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
                 self.lblOutput.clear()
                 self.twAttributes.setRowCount(len(classProperties))
                 self.twAttributes.setColumnCount(3)
-                self.twAttributes.setHorizontalHeaderLabels(["AttrbuteName", "PropertySet", "Value"])
+                self.twAttributes.setHorizontalHeaderLabels(["AttributeName", "PropertySet", "Value"])
                 self.twAttributes.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Stretch)
                 for index, row in classProperties.iterrows():
-                    self.twAttributes.setItem(index, 0, QtWidgets.QTableWidgetItem(row["name"]))
-                    self.twAttributes.setItem(index, 1, QtWidgets.QTableWidgetItem(row["propertySet"]))
+                    attribute_item = QtWidgets.QTableWidgetItem(str(row.get("name", "")))
+                    property_set_item = QtWidgets.QTableWidgetItem(str(row.get("propertySet", "")))
+                    self.twAttributes.setItem(index, 0, attribute_item)
+                    self.twAttributes.setItem(index, 1, property_set_item)
+
+                    allowed_values = row.get("allowedValues", [])
+                    data_type = row.get("dataType", "")
+                    predefined_value = row.get("predefinedValue", "")
+                    value_widget = self.buildValueWidget(allowed_values, data_type, predefined_value)
+                    self.twAttributes.setCellWidget(index, 2, value_widget)
+                    if isinstance(value_widget, QtWidgets.QComboBox):
+                        value_widget.currentTextChanged.connect(lambda text, row=index: self.syncValueItemText(row, text))
+                    elif isinstance(value_widget, QtWidgets.QLineEdit):
+                        placeholder_text = value_widget.placeholderText()
+                        value_widget.textChanged.connect(lambda text, row=index, placeholder=placeholder_text: self.syncValueItemText(row, text if text else placeholder))
+
+                    self.twAttributes.setItem(index, 2, QtWidgets.QTableWidgetItem("") )
+                    self.updateValueItemAppearance(index, data_type, allowed_values)
+                    if isinstance(value_widget, QtWidgets.QComboBox):
+                        self.syncValueItemText(index, value_widget.currentText())
+                    elif isinstance(value_widget, QtWidgets.QLineEdit):
+                        self.syncValueItemText(index, value_widget.placeholderText())
+                self.twAttributes.setSortingEnabled(True)
+                self.applyAttributeFilter(self.edAttributeFilter.text())
             except:
                 self.twAttributes.setRowCount(0)
                 self.lblOutput.setText("No class properties found")
-        
+                self.twAttributes.setSortingEnabled(True)
+
         self.enableClassifyFeatures()
+
+    def applyAttributeFilter(self, text):
+        filterText = text.strip().lower()
+        rowCount = self.twAttributes.rowCount()
+
+        for row in range(rowCount):
+            matches = True
+            if filterText:
+                matches = False
+                for column in range(self.twAttributes.columnCount()):
+                    cellText = self.attributeCellText(row, column)
+                    if cellText and filterText in cellText.lower():
+                        matches = True
+                        break
+            self.twAttributes.setRowHidden(row, not matches)
+
+    def attributeCellText(self, row, column):
+        widget = self.twAttributes.cellWidget(row, column)
+        if isinstance(widget, QtWidgets.QComboBox):
+            return widget.currentText().strip()
+        if isinstance(widget, QtWidgets.QLineEdit):
+            return widget.text().strip()
+
+        item = self.twAttributes.item(row, column)
+        if item is not None:
+            return item.text().strip()
+        return ""
+
+    def attributeValue(self, row):
+        widget = self.twAttributes.cellWidget(row, 2)
+        if isinstance(widget, QtWidgets.QComboBox):
+            current_data = widget.currentData()
+            if current_data is not None and current_data != "":
+                return str(current_data).strip()
+            return widget.currentText().strip()
+        if isinstance(widget, QtWidgets.QLineEdit):
+            value = widget.text().strip()
+            if value:
+                return value
+            return ""
+
+        item = self.twAttributes.item(row, 2)
+        if item is not None:
+            return item.text().strip()
+        return ""
+
+    def buildValueWidget(self, allowed_values, data_type, predefined_value):
+        if isinstance(allowed_values, list) and len(allowed_values) > 0:
+            comboBox = QtWidgets.QComboBox()
+            comboBox.setEditable(False)
+            comboBox.addItem("")
+
+            selected_index = 0
+            for index, allowed_value in enumerate(allowed_values, start=1):
+                label = allowed_value.get("value") or allowed_value.get("code") or allowed_value.get("uri") or ""
+                comboBox.addItem(label, allowed_value.get("uri", ""))
+                if predefined_value and str(predefined_value) == label:
+                    selected_index = index
+
+            if selected_index > 0:
+                comboBox.setCurrentIndex(selected_index)
+            return comboBox
+
+        if str(data_type).lower() == "boolean":
+            comboBox = QtWidgets.QComboBox()
+            comboBox.setEditable(False)
+            comboBox.addItem("", "")
+            comboBox.addItem("True", "True")
+            comboBox.addItem("False", "False")
+            comboBox.setCurrentIndex(0)
+            return comboBox
+
+        lineEdit = QtWidgets.QLineEdit()
+        lineEdit.setPlaceholderText(str(data_type) if data_type else "")
+        lineEdit.setClearButtonEnabled(True)
+        return lineEdit
+
+    def updateValueItemAppearance(self, row, data_type, allowed_values):
+        item = self.twAttributes.item(row, 2)
+        if item is None:
+            item = QtWidgets.QTableWidgetItem("")
+            self.twAttributes.setItem(row, 2, item)
+
+        if isinstance(allowed_values, list) and len(allowed_values) > 0:
+            item.setText("")
+            item.setToolTip("Choose an allowed value")
+            item.setForeground(QtGui.QBrush())
+        elif str(data_type).lower() == "boolean":
+            item.setText("")
+            item.setToolTip("Choose True or False")
+            item.setForeground(QtGui.QBrush())
+        elif data_type:
+            item.setText("")
+            item.setToolTip(f"Data type: {data_type}")
+            item.setForeground(QtGui.QBrush(QtGui.QColor("#808080")))
+        else:
+            item.setText("")
+            item.setToolTip("")
+            item.setForeground(QtGui.QBrush())
+
+    def syncValueItemText(self, row, text):
+        item = self.twAttributes.item(row, 2)
+        if item is not None:
+            item.setText(text.strip())
 
     # if layer is chosen
     def onLayerChosen(self):
@@ -210,7 +359,7 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
         self.btnSelectAll.setEnabled(True)
         layers = QgsProject.instance().mapLayersByName(self.chooseLayer.currentText())
         self.setLayer(layers[0])
-        
+
         self.enableClassifyFeatures()
 
     # enable classification button
@@ -220,9 +369,9 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
 
     def onClassifyFeaturesClicked(self):
         self.setSelectedFeatures(layer.selectedFeatureIds())
-        
+
         shapefile = layer.storageType() == "ESRI Shapefile"
-    
+
         # add class to selected features
         if shapefile:
             self.addContent("bSDDClass", dictClass) 
@@ -236,8 +385,7 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
             
             if layer.storageType() == "GPKG" and self.cbClassifyFile.isChecked(): 
                 self.modifyGeoPackage()
-            
-            
+
         # add attributes and values to selected features
         rowCount = self.twAttributes.rowCount()
             
@@ -245,13 +393,11 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
             attributes = {}
 
             for row in range(rowCount):
-                attribute = self.twAttributes.item(row, 0).text()
-                group = self.twAttributes.item(row, 1).text()
-                value = ""
-                try:
-                    value = self.twAttributes.item(row, 2).text()
-                except:
-                    value = "NULL"
+                attribute = self.attributeCellText(row, 0)
+                group = self.attributeCellText(row, 1)
+                value = self.attributeValue(row)
+                if not value:
+                    continue
                 attributes[attribute] = value
                 
                 if not shapefile:
@@ -259,22 +405,22 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
                         self.addContent(group + "|" + attribute, value)
                     else:
                         self.addContent(attribute, value)
-            
+
             if shapefile:        
                 attributesJson = json.dumps(attributes)
                 self.addContent("bSDDAttr", attributesJson)
-                  
+
         # refresh attribute table    
         layer.reload()
 
     def onSelectAllClicked(self):
         layer.selectAll()
-     
+
     # add value only to selected features   
     def addContent(self, fieldName, value):
-        
+
         layer_provider=layer.dataProvider()
-        
+
         # if field does not exist, add it
         if  not fieldName in layer.fields().names():
             layer_provider.addAttributes([QgsField(fieldName, QMetaType.Type.QString)])
@@ -299,7 +445,7 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
         finally:
             # Ensure the layer is updated
             layer.triggerRepaint()
-            
+
     def toggleChooseFileButton(self):
         self.btnChooseFile.setEnabled(self.cbClassifyFile.isChecked())
 
@@ -309,17 +455,17 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
         if fileName:
             self.setFilePath(fileName)
             self.lblFilePath.setText(filePath)
-            
+
     def modifyGeoPackage(self):
         conn = sqlite3.connect(filePath)
         c = conn.cursor()
-        
+
         # insert extension into gpkg_extensions table
         tables_to_insert = ['gpkgext_relations', 'feature_classification_mapping', 'feature_classification_attributes_mapping', 'classification_dictionary_mapping']
         for table in tables_to_insert:
-            
+
             c.execute("SELECT COUNT(*) FROM gpkg_extensions WHERE table_name = ?", (table,))
-            
+
             if c.fetchone()[0] == 0:
                 insert_extension = """
                 INSERT INTO gpkg_extensions ("table_name", "extension_name", "definition", "scope") VALUES 
@@ -327,7 +473,7 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
                 """
                 c.execute(insert_extension, (table,))
                 conn.commit()
-        
+
         # create new tables
         create_table_classification = """
         CREATE TABLE IF NOT EXISTS "classification" ( 
@@ -338,7 +484,7 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
         """
         c.execute(create_table_classification)
         conn.commit()
-        
+
         create_table_dictionary = """
         CREATE TABLE IF NOT EXISTS "dictionary" ( 
         "did" INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, 
@@ -349,7 +495,7 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
         """
         c.execute(create_table_dictionary)
         conn.commit()
-        
+
         create_table_classification_attributes = """
         CREATE TABLE IF NOT EXISTS "classification_attributes" ( 
         "caid" INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, 
@@ -360,7 +506,7 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
         """
         c.execute(create_table_classification_attributes)
         conn.commit()
-        
+
         create_table_feature_classification_mapping = """
         CREATE TABLE IF NOT EXISTS "feature_classification_mapping" (
         base_id INTEGER NOT NULL,
@@ -370,7 +516,7 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
         """
         c.execute(create_table_feature_classification_mapping)
         conn.commit()
-        
+
         create_table_feature_classification_attributes_mapping = """
         CREATE TABLE IF NOT EXISTS "feature_classification_attributes_mapping" (
         base_id INTEGER NOT NULL,
@@ -380,7 +526,7 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
         """
         c.execute(create_table_feature_classification_attributes_mapping)
         conn.commit()
-        
+
         create_table_classification_dictionary_mapping = """
         CREATE TABLE IF NOT EXISTS "classification_dictionary_mapping" (
         base_id INTEGER NOT NULL,
@@ -390,7 +536,7 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
         """
         c.execute(create_table_classification_dictionary_mapping)
         conn.commit()
-        
+
         create_table_gpkgext_relations = """
         CREATE TABLE IF NOT EXISTS gpkgext_relations (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -404,7 +550,7 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
         """
         c.execute(create_table_gpkgext_relations)
         conn.commit()
-        
+
         parts = re.split(r'[|?&]', layer.source())
         layer_table = None
         for part in parts:
@@ -413,7 +559,7 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
                 break
         if layer_table is None:
             raise ValueError("Layer table name could not be extracted from the source.")
-        
+
         # initialize relation tables
         init_relation_tables = """
         INSERT INTO gpkgext_relations ("base_table_name", "base_primary_column", "related_table_name", "related_primary_column", "relation_name", "mapping_table_name") VALUES 
@@ -424,7 +570,7 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
         """
         c.execute(init_relation_tables, (layer_table, layer_table))
         conn.commit()
-        
+
         # initialize relation tables
         add_attribute_tables = """
         INSERT INTO gpkg_contents ("table_name", "data_type", "identifier") VALUES 
@@ -435,19 +581,19 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
         """
         c.execute(add_attribute_tables)
         conn.commit()
-        
+
         # insert classification
         dictionary_name = dictionary["name"]
         dictionary_uri = dictionary["uri"]
         dictionary_version = dictionary["version"]
         new_classification_id = ""
-        
+
         selectClassification = """
         select cid from classification where name = ? and uri = ?;
         """
         c.execute(selectClassification, (dictClass, dictUrl))
         result = c.fetchone()
-        
+
         if result is not None:
             new_classification_id = result[0]
         else:
@@ -458,7 +604,7 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
             c.execute(insert_classification, (dictClass, dictUrl))
             conn.commit()
             new_classification_id = c.lastrowid
-            
+
             # insert dictionary
             new_dictionary_id = ""
             selectDictionary = """
@@ -466,7 +612,7 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
             """
             c.execute(selectDictionary, (dictionary_uri, dictionary_name, dictionary_version))
             res = c.fetchone()
-            
+
             if res is not None:
                 new_dictionary_id = res[0]
             else:
@@ -477,7 +623,7 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
                 c.execute(insert_dictionary, (dictionary_name, dictionary_uri, dictionary_version))
                 conn.commit()
                 new_dictionary_id = c.lastrowid
-                
+
                 # insert classification dictionary relations
                 insert_dictionary_relations = """
                 INSERT INTO classification_dictionary_mapping ("base_id", "related_id") VALUES (?, ?)
@@ -494,26 +640,24 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
             """
             c.execute(insert_relations, (featureId, new_classification_id))
             conn.commit()
-        
+
         # insert attributes
         rowCount = self.twAttributes.rowCount()  
         if rowCount > 0:
             for row in range(rowCount):
-                attribute = self.twAttributes.item(row, 0).text()
-                group = self.twAttributes.item(row, 1).text()
-                value = ""
-                try:
-                    value = self.twAttributes.item(row, 2).text()
-                except:
-                    value = "NULL"
+                attribute = self.attributeCellText(row, 0)
+                group = self.attributeCellText(row, 1)
+                value = self.attributeValue(row)
+                if not value:
+                    continue
                 insert_attributes = """
                 INSERT INTO classification_attributes ("name", "property_set", "value") VALUES (?, ?, ?);
                 """
                 c.execute(insert_attributes, (attribute, group, value))
                 conn.commit()
-                
+
                 new_attribute_id = c.lastrowid
-                
+
                 # insert feature attribute relations
                 for featureId in selectedFeatures:
                     insert_attribut_relations = """

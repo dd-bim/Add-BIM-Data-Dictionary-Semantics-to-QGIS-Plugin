@@ -6,15 +6,9 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>826</width>
-    <height>553</height>
+    <width>840</width>
+    <height>578</height>
    </rect>
-  </property>
-  <property name="baseSize">
-   <size>
-    <width>0</width>
-    <height>16</height>
-   </size>
   </property>
   <property name="windowTitle">
    <string>ClassificationWithBSDD</string>
@@ -34,12 +28,6 @@
        <height>16</height>
       </size>
      </property>
-     <property name="baseSize">
-      <size>
-       <width>94</width>
-       <height>16</height>
-      </size>
-     </property>
      <property name="text">
       <string>URL Dictionary API:</string>
      </property>
@@ -49,18 +37,12 @@
     <widget class="QLineEdit" name="edUrlToDictionary">
      <property name="minimumSize">
       <size>
-       <width>808</width>
+       <width>0</width>
        <height>20</height>
       </size>
      </property>
-     <property name="baseSize">
-      <size>
-       <width>784</width>
-       <height>19</height>
-      </size>
-     </property>
      <property name="text">
-      <string>https://api.bsdd.buildingsmart.org/api/Dictionary/v1</string>
+      <string>https://api.bsdd.buildingsmart.org</string>
      </property>
      <property name="placeholderText">
       <string>bSDD API URL</string>
@@ -75,12 +57,6 @@
        <height>23</height>
       </size>
      </property>
-     <property name="baseSize">
-      <size>
-       <width>75</width>
-       <height>23</height>
-      </size>
-     </property>
      <property name="cursor">
       <cursorShape>PointingHandCursor</cursorShape>
      </property>
@@ -89,7 +65,7 @@
      </property>
     </widget>
    </item>
-   <item row="2" column="1" colspan="4">
+   <item row="2" column="1" colspan="3">
     <widget class="QLabel" name="lblConnError">
      <property name="sizePolicy">
       <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
@@ -99,7 +75,7 @@
      </property>
      <property name="minimumSize">
       <size>
-       <width>480</width>
+       <width>0</width>
        <height>16</height>
       </size>
      </property>
@@ -107,12 +83,6 @@
       <size>
        <width>16777215</width>
        <height>16777215</height>
-      </size>
-     </property>
-     <property name="baseSize">
-      <size>
-       <width>480</width>
-       <height>16</height>
       </size>
      </property>
      <property name="text">
@@ -127,14 +97,8 @@
      </property>
      <property name="minimumSize">
       <size>
-       <width>808</width>
+       <width>0</width>
        <height>20</height>
-      </size>
-     </property>
-     <property name="baseSize">
-      <size>
-       <width>784</width>
-       <height>19</height>
       </size>
      </property>
      <property name="editable">
@@ -162,12 +126,6 @@
        <height>16</height>
       </size>
      </property>
-     <property name="baseSize">
-      <size>
-       <width>35</width>
-       <height>16</height>
-      </size>
-     </property>
      <property name="text">
       <string>Name:</string>
      </property>
@@ -177,7 +135,7 @@
     <widget class="QLabel" name="lblName">
      <property name="minimumSize">
       <size>
-       <width>480</width>
+       <width>0</width>
        <height>16</height>
       </size>
      </property>
@@ -185,12 +143,6 @@
       <size>
        <width>16777215</width>
        <height>16777215</height>
-      </size>
-     </property>
-     <property name="baseSize">
-      <size>
-       <width>500</width>
-       <height>16</height>
       </size>
      </property>
      <property name="text">
@@ -215,7 +167,7 @@
     <widget class="QLabel" name="lblVersion">
      <property name="minimumSize">
       <size>
-       <width>190</width>
+       <width>0</width>
        <height>16</height>
       </size>
      </property>
@@ -223,12 +175,6 @@
       <size>
        <width>16777215</width>
        <height>16777215</height>
-      </size>
-     </property>
-     <property name="baseSize">
-      <size>
-       <width>190</width>
-       <height>16</height>
       </size>
      </property>
      <property name="text">
@@ -246,14 +192,8 @@
      </property>
      <property name="minimumSize">
       <size>
-       <width>808</width>
+       <width>0</width>
        <height>20</height>
-      </size>
-     </property>
-     <property name="baseSize">
-      <size>
-       <width>784</width>
-       <height>19</height>
       </size>
      </property>
      <property name="editable">
@@ -270,7 +210,35 @@
      </property>
     </widget>
    </item>
-   <item row="6" column="0">
+   <item row="6" column="0" colspan="6">
+    <widget class="QLabel" name="lblClassDescription">
+     <property name="sizePolicy">
+      <sizepolicy hsizetype="Expanding" vsizetype="Minimum">
+       <horstretch>0</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
+     </property>
+     <property name="minimumSize">
+      <size>
+       <width>0</width>
+       <height>20</height>
+      </size>
+     </property>
+     <property name="maximumSize">
+      <size>
+       <width>16777215</width>
+       <height>80</height>
+      </size>
+     </property>
+     <property name="text">
+      <string/>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item row="7" column="0">
     <widget class="QLabel" name="label">
      <property name="minimumSize">
       <size>
@@ -284,67 +252,74 @@
        <height>16</height>
       </size>
      </property>
-     <property name="baseSize">
-      <size>
-       <width>52</width>
-       <height>16</height>
-      </size>
-     </property>
      <property name="text">
       <string>Attributes:</string>
      </property>
     </widget>
    </item>
-   <item row="7" column="0" colspan="6">
+     <item row="8" column="0" colspan="6">
+        <widget class="QLineEdit" name="edAttributeFilter">
+         <property name="minimumSize">
+            <size>
+             <width>0</width>
+             <height>20</height>
+            </size>
+         </property>
+         <property name="placeholderText">
+            <string>Filter attributes and property sets ...</string>
+         </property>
+        </widget>
+     </item>
+     <item row="9" column="0" colspan="6">
     <widget class="QTableWidget" name="twAttributes">
      <property name="minimumSize">
       <size>
-       <width>808</width>
+       <width>0</width>
        <height>150</height>
       </size>
      </property>
     </widget>
    </item>
-   <item row="8" column="0" colspan="6">
+     <item row="10" column="0" colspan="6">
     <widget class="QLabel" name="lblOutput">
+     <property name="sizePolicy">
+      <sizepolicy hsizetype="Expanding" vsizetype="Minimum">
+       <horstretch>0</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
+     </property>
      <property name="minimumSize">
       <size>
-       <width>808</width>
-       <height>16</height>
+       <width>0</width>
+       <height>50</height>
       </size>
      </property>
      <property name="maximumSize">
       <size>
-       <width>808</width>
-       <height>16</height>
-      </size>
-     </property>
-     <property name="baseSize">
-      <size>
-       <width>400</width>
-       <height>16</height>
+       <width>16777215</width>
+       <height>100</height>
       </size>
      </property>
      <property name="text">
       <string/>
      </property>
+     <property name="alignment">
+      <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
     </widget>
    </item>
-   <item row="9" column="0" colspan="6">
+    <item row="11" column="0" colspan="6">
     <widget class="QComboBox" name="chooseLayer">
      <property name="enabled">
       <bool>true</bool>
      </property>
      <property name="minimumSize">
       <size>
-       <width>808</width>
+       <width>0</width>
        <height>20</height>
-      </size>
-     </property>
-     <property name="baseSize">
-      <size>
-       <width>784</width>
-       <height>19</height>
       </size>
      </property>
      <property name="editable">
@@ -361,18 +336,12 @@
      </property>
     </widget>
    </item>
-   <item row="10" column="0">
+    <item row="12" column="0">
     <widget class="QPushButton" name="btnSelectAll">
      <property name="enabled">
       <bool>false</bool>
      </property>
      <property name="maximumSize">
-      <size>
-       <width>75</width>
-       <height>23</height>
-      </size>
-     </property>
-     <property name="baseSize">
       <size>
        <width>75</width>
        <height>23</height>
@@ -386,15 +355,9 @@
      </property>
     </widget>
    </item>
-   <item row="11" column="0" colspan="2">
+    <item row="13" column="0" colspan="2">
     <widget class="QCheckBox" name="cbClassifyFile">
      <property name="maximumSize">
-      <size>
-       <width>220</width>
-       <height>18</height>
-      </size>
-     </property>
-     <property name="baseSize">
       <size>
        <width>220</width>
        <height>18</height>
@@ -405,7 +368,7 @@
      </property>
     </widget>
    </item>
-   <item row="11" column="2">
+    <item row="13" column="2">
     <widget class="QPushButton" name="btnChooseFile">
      <property name="enabled">
       <bool>false</bool>
@@ -422,18 +385,12 @@
        <height>23</height>
       </size>
      </property>
-     <property name="baseSize">
-      <size>
-       <width>75</width>
-       <height>23</height>
-      </size>
-     </property>
      <property name="text">
       <string>Choose file ...</string>
      </property>
     </widget>
    </item>
-   <item row="11" column="3" colspan="3">
+    <item row="13" column="3" colspan="3">
     <widget class="QLabel" name="lblFilePath">
      <property name="sizePolicy">
       <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
@@ -443,7 +400,7 @@
      </property>
      <property name="minimumSize">
       <size>
-       <width>400</width>
+       <width>0</width>
        <height>16</height>
       </size>
      </property>
@@ -453,25 +410,19 @@
        <height>16777215</height>
       </size>
      </property>
-     <property name="baseSize">
-      <size>
-       <width>400</width>
-       <height>16</height>
-      </size>
-     </property>
      <property name="text">
       <string/>
      </property>
     </widget>
    </item>
-   <item row="12" column="0" colspan="6">
+    <item row="14" column="0" colspan="6">
     <widget class="QPushButton" name="btnClassifyFeatures">
      <property name="enabled">
       <bool>false</bool>
      </property>
      <property name="minimumSize">
       <size>
-       <width>808</width>
+       <width>0</width>
        <height>20</height>
       </size>
      </property>
@@ -483,39 +434,18 @@
      </property>
     </widget>
    </item>
-   <item row="13" column="0" colspan="6">
-    <layout class="QVBoxLayout" name="verticalLayout">
-     <item>
-      <layout class="QHBoxLayout" name="horizontalLayout">
-       <item>
-        <spacer name="horizontalSpacer">
-         <property name="orientation">
-          <enum>Qt::Horizontal</enum>
-         </property>
-         <property name="sizeHint" stdset="0">
-          <size>
-           <width>40</width>
-           <height>20</height>
-          </size>
-         </property>
-        </spacer>
-       </item>
-       <item>
-        <widget class="QDialogButtonBox" name="button_box">
-         <property name="cursor">
-          <cursorShape>PointingHandCursor</cursorShape>
-         </property>
-         <property name="orientation">
-          <enum>Qt::Horizontal</enum>
-         </property>
-         <property name="standardButtons">
-          <set>QDialogButtonBox::Cancel|QDialogButtonBox::Ok</set>
-         </property>
-        </widget>
-       </item>
-      </layout>
-     </item>
-    </layout>
+    <item row="15" column="0" colspan="6" alignment="Qt::AlignRight">
+    <widget class="QDialogButtonBox" name="button_box">
+     <property name="cursor">
+      <cursorShape>PointingHandCursor</cursorShape>
+     </property>
+     <property name="orientation">
+      <enum>Qt::Horizontal</enum>
+     </property>
+     <property name="standardButtons">
+      <set>QDialogButtonBox::Cancel|QDialogButtonBox::Ok</set>
+     </property>
+    </widget>
    </item>
   </layout>
  </widget>
