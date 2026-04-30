@@ -48,6 +48,8 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
     classList = []
     layer = ""
     dictClass = ""
+    lastSelectedDictionaryUri = ""
+    lastSelectedApiUrl = ""
 
     def setApiUrl(self, url):
         global input_url
@@ -142,6 +144,12 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
         self.setLayerSelected(False)
 
         self.btnConnectToDictionary.clicked.connect(self.onConnectToDictionaryClicked)
+        # Reset API URL to default bSDD
+        try:
+            self.btnResetApiUrl.clicked.connect(self.onResetApiUrlClicked)
+        except Exception:
+            # btnResetApiUrl may not exist if UI wasn't regenerated; ignore
+            pass
         self.btnClassifyFeatures.clicked.connect(self.onClassifyFeaturesClicked)
         self.btnSelectAll.clicked.connect(self.onSelectAllClicked)
         self.edAttributeFilter.textChanged.connect(self.applyAttributeFilter)
@@ -157,10 +165,18 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
         self.cbClassifyFile.stateChanged.connect(self.toggleChooseFileButton)
         # Connect the button to the method
         self.btnChooseFile.clicked.connect(self.openFileDialog)
+        
+        # Auto-restore last selected dictionary on dialog start
+        if ClassificationWithBSDDDialog.lastSelectedApiUrl:
+            self.edUrlToDictionary.setText(ClassificationWithBSDDDialog.lastSelectedApiUrl)
+        if ClassificationWithBSDDDialog.lastSelectedDictionaryUri and self.edUrlToDictionary.text():
+            QtCore.QTimer.singleShot(100, self.onConnectToDictionaryClicked)
 
     def onConnectToDictionaryClicked(self):
 
         url = self.edUrlToDictionary.text()
+        # Save API URL for next session
+        ClassificationWithBSDDDialog.lastSelectedApiUrl = url
         self.setApiUrl(url)
 
         response, status_code, error = self.makeApiRequest(url + '/api/Dictionary/v1', 'Load dictionaries')
@@ -182,14 +198,31 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
                 label = f"{row['name']} ({row['version']})"
                 self.chooseDictionary.addItem(label, row['uri'])
             self.chooseDictionary.currentIndexChanged.connect(self.onDictionaryChosen)
+            
+            # Restore previously selected dictionary
+            if ClassificationWithBSDDDialog.lastSelectedDictionaryUri:
+                for index in range(self.chooseDictionary.count()):
+                    if self.chooseDictionary.itemData(index) == ClassificationWithBSDDDialog.lastSelectedDictionaryUri:
+                        self.chooseDictionary.setCurrentIndex(index)
+                        break
         else:
             self.lblConnError.setText(f"Couldn't connect to the API (Status: {status_code})")
             return
+
+    def onResetApiUrlClicked(self):
+        default = "https://api.bsdd.buildingsmart.org"
+        self.edUrlToDictionary.setText(default)
+        ClassificationWithBSDDDialog.lastSelectedApiUrl = default
+        self.logApiMessage("API URL reset to default bSDD")
 
     def onDictionaryChosen(self):
         dictionaryUri = self.chooseDictionary.currentData()
         if not dictionaryUri:
             return
+        
+        # Save dictionary URI for next session
+        ClassificationWithBSDDDialog.lastSelectedDictionaryUri = dictionaryUri
+        
         self.chooseClass.clear()
         self.chooseClass.setCurrentText("Choose concept ...")
         self.lblOutput.clear()
@@ -422,6 +455,7 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
 
     def onClassifyFeaturesClicked(self):
         self.setSelectedFeatures(layer.selectedFeatureIds())
+        include_empty_properties = self.cbIncludeEmptyProperties.isChecked()
 
         shapefile = layer.storageType() == "ESRI Shapefile"
 
@@ -449,7 +483,7 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
                 attribute = self.attributeCellText(row, 0)
                 group = self.attributeCellText(row, 1)
                 value = self.attributeValue(row)
-                if not value:
+                if not include_empty_properties and not value:
                     continue
                 attributes[attribute] = value
                 
@@ -696,12 +730,13 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
 
         # insert attributes
         rowCount = self.twAttributes.rowCount()  
+        include_empty_properties = self.cbIncludeEmptyProperties.isChecked()
         if rowCount > 0:
             for row in range(rowCount):
                 attribute = self.attributeCellText(row, 0)
                 group = self.attributeCellText(row, 1)
                 value = self.attributeValue(row)
-                if not value:
+                if not include_empty_properties and not value:
                     continue
                 insert_attributes = """
                 INSERT INTO classification_attributes ("name", "property_set", "value") VALUES (?, ?, ?);
