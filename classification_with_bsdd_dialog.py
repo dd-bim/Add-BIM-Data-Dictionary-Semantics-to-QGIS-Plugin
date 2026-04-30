@@ -494,7 +494,7 @@ class ClassificationWithBSDDDialog(QtWidgets.QDialog, FORM_CLASS):
                         self.addContent(attribute, value)
 
             if shapefile:        
-                attributesJson = json.dumps(attributes)
+                attributesJson = json.dumps(attributes, ensure_ascii=False)
                 self.addContent("bSDDAttr", attributesJson)
 
         # refresh attribute table    
